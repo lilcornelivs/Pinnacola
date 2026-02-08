@@ -6,20 +6,34 @@ import time
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr", layout="wide")
 
-# --- TRUCCO CSS PER ELIMINARE IL PULSARE E L'OSCURAMENTO ---
+# --- CSS NUCLEARE ANTI-APPANNAMENTO ---
+# Questo blocca TUTTI i contenitori di Streamlit alla massima opacità
 st.markdown("""
     <style>
-    /* Impedisce l'oscuramento della pagina durante il caricamento */
-    .stApp {
+    /* Blocca l'opacità di tutta l'app */
+    [data-testid="stAppViewContainer"], 
+    [data-testid="stAppViewBlockContainer"], 
+    [data-testid="stApp"],
+    section.main {
         opacity: 1 !important;
+        filter: none !important;
+        transition: none !important;
     }
-    /* Nasconde l'icona di caricamento in alto a destra */
-    [data-testid="stStatusWidget"] {
+    
+    /* Elimina l'oscuramento specifico che avviene durante il 'running' */
+    div[data-testid="stStatusWidget"] {
         display: none !important;
     }
-    /* Rende le transizioni istantanee per eliminare il 'flash' */
-    div.block-container {
+    
+    /* Evita che gli elementi diventino trasparenti mentre caricano */
+    .st-emotion-cache-16idsys p, .st-emotion-cache-16idsys span, .st-emotion-cache-16idsys div {
+        opacity: 1 !important;
+    }
+
+    /* Rende tutto istantaneo */
+    * {
         transition: none !important;
+        animation: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -63,7 +77,7 @@ with st.sidebar:
 
 st.title("🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr")
 
-# --- DASHBOARD TEMPO REALE (Senza pulsazioni grazie al CSS) ---
+# --- DASHBOARD TEMPO REALE ---
 @st.fragment(run_every="5s")
 def live_dashboard(s_val):
     data = get_data()
@@ -106,7 +120,6 @@ if tot1 < soglia_scelta and tot2 < soglia_scelta:
     st.subheader("📝 Registra Mano")
     with st.form("form_mano", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
-        # value=None (nessuno zero), step=5 (salti di 5), min_value=-5000 (negativi ok)
         v1 = col1.number_input("Punti Makka Pakka", value=None, placeholder="-30, 50...", step=5, min_value=-5000)
         v2 = col2.number_input("Punti Omo Cratolo", value=None, placeholder="-30, 50...", step=5, min_value=-5000)
         chi_chiude = col3.selectbox("Chi ha chiuso?", ["Nessuno", "Makka Pakka", "Omo Cratolo"])
