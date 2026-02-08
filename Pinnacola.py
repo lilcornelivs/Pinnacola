@@ -54,7 +54,7 @@ else:
     n_p, tot1, tot2 = 1, 0, 0
 
 # --- DASHBOARD PRINCIPALE ---
-st.title("🃏 Pinnacola Live Sync")
+st.title("🃏 Pinaculo d l cratoni")
 
 # Riga superiore con Vittorie Totali (Medagliere) e Punti Correnti
 m1, m2 = st.columns(2)
@@ -102,3 +102,4 @@ st.divider()
 st.subheader("📜 Storico della Partita Corrente")
 if not df.empty:
     st.table(df[df['partita'] == n_p].sort_values(by="mano", ascending=False))
+
