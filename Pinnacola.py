@@ -103,3 +103,4 @@ st.subheader("📜 Storico della Partita Corrente")
 if not df.empty:
     st.table(df[df['partita'] == n_p].sort_values(by="mano", ascending=False))
 
+
