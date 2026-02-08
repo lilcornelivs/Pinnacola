@@ -3,9 +3,28 @@ import pandas as pd
 import requests
 import time
 
+# --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr", layout="wide")
 
-# !!! INCOLLA QUI IL TUO NUOVO LINK /EXEC !!!
+# --- TRUCCO CSS PER ELIMINARE IL PULSARE E L'OSCURAMENTO ---
+st.markdown("""
+    <style>
+    /* Impedisce l'oscuramento della pagina durante il caricamento */
+    .stApp {
+        opacity: 1 !important;
+    }
+    /* Nasconde l'icona di caricamento in alto a destra */
+    [data-testid="stStatusWidget"] {
+        display: none !important;
+    }
+    /* Rende le transizioni istantanee per eliminare il 'flash' */
+    div.block-container {
+        transition: none !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# !!! IL TUO URL DI GOOGLE APPS SCRIPT !!!
 API_URL = "https://script.google.com/macros/s/AKfycbw3YLweEqP1AxW912TUcMbBDRKv655VEAdWwG3Etxwrw-L2TG110kPFVaupyXy0j10VRA/exec"
 
 def get_data():
@@ -20,37 +39,34 @@ def get_data():
     except:
         return pd.DataFrame(columns=["partita", "mano", "p1", "p2", "chi"])
 
-# --- CARICAMENTO INIZIALE ---
+# --- CARICAMENTO INIZIALE SOGLIA ---
 df_init = get_data()
-
-# Recupero Soglia Salvata
 soglia_default = 1500
 if not df_init.empty and 'chi' in df_init.columns:
     c_rows = df_init[df_init['chi'] == 'CONFIG']
     if not c_rows.empty:
         soglia_default = int(c_rows.iloc[-1]['partita'])
 
-# Sidebar
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("⚙️ Impostazioni")
     soglia_scelta = st.number_input("Soglia Vittoria", value=soglia_default, step=100)
-    if st.button("💾 Salva Soglia per sempre"):
+    if st.button("💾 Salva Soglia"):
         requests.post(API_URL, json={"action": "set_soglia", "valore": int(soglia_scelta)})
-        st.success(f"Soglia {soglia_scelta} salvata!")
+        st.success("Soglia Salvata!")
         time.sleep(1)
         st.rerun()
     st.divider()
-    if st.button("🗑️ Reset Partite (Mantiene Soglia)"):
+    if st.button("🗑️ Reset Partite"):
         requests.post(API_URL, json={"action": "reset"})
         st.rerun()
 
 st.title("🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr")
 
-# --- DASHBOARD TEMPO REALE ---
+# --- DASHBOARD TEMPO REALE (Senza pulsazioni grazie al CSS) ---
 @st.fragment(run_every="5s")
 def live_dashboard(s_val):
     data = get_data()
-    # Filtriamo via le righe di configurazione per i calcoli
     df_p = data[data['chi'] != 'CONFIG'] if not data.empty else data
     
     v_makka, v_omo, n_p, t1, t2 = 0, 0, 1, 0, 0
@@ -90,8 +106,9 @@ if tot1 < soglia_scelta and tot2 < soglia_scelta:
     st.subheader("📝 Registra Mano")
     with st.form("form_mano", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
-        v1 = col1.number_input("Punti Makka Pakka", value=None, placeholder="-30, 50...", step=5)
-        v2 = col2.number_input("Punti Omo Cratolo", value=None, placeholder="-30, 50...", step=5)
+        # value=None (nessuno zero), step=5 (salti di 5), min_value=-5000 (negativi ok)
+        v1 = col1.number_input("Punti Makka Pakka", value=None, placeholder="-30, 50...", step=5, min_value=-5000)
+        v2 = col2.number_input("Punti Omo Cratolo", value=None, placeholder="-30, 50...", step=5, min_value=-5000)
         chi_chiude = col3.selectbox("Chi ha chiuso?", ["Nessuno", "Makka Pakka", "Omo Cratolo"])
         if st.form_submit_button("REGISTRA"):
             requests.post(API_URL, json={
@@ -101,7 +118,8 @@ if tot1 < soglia_scelta and tot2 < soglia_scelta:
             st.rerun()
 else:
     st.balloons()
-    st.success("🏁 PARTITA FINITA!")
-    if st.button("Nuova Partita"):
+    vincitore = "Makka Pakka" if tot1 >= soglia_scelta else "Omo Cratolo"
+    st.success(f"🏆 {vincitore.upper()} HA VINTO LA PARTITA!")
+    if st.button("🏁 Inizia Nuova Partita"):
         requests.post(API_URL, json={"action": "add", "partita": n_partita + 1, "mano": 0, "p1": 0, "p2": 0, "chi": "START"})
         st.rerun()
