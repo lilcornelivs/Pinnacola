@@ -1,101 +1,88 @@
 import streamlit as st
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
+import requests
 from streamlit_autorefresh import st_autorefresh
 
+# --- CONFIGURAZIONE ---
 st.set_page_config(page_title="Pinnacola LIVE", layout="wide")
 
-# --- AUTO-REFRESH (TEMPO REALE) ---
-# Ogni 5 secondi l'app si aggiorna da sola per vedere se l'altro ha inserito punti
-st_autorefresh(interval=5000, key="datarefresh")
+# Link magico di SheetDB (Metti il tuo qui)
+API_URL = "https://sheetdb.io/api/v1/za39slqkwuwfj"
 
-# --- DATABASE ---
-url = "https://docs.google.com/spreadsheets/d/11J-xlOau6L9_6qz_1pQt4QZGX5uIFVjU-n94fiXuOtk/edit?usp=sharing"
-conn = st.connection("gsheets", type=GSheetsConnection)
+# Aggiornamento automatico ogni 5 secondi per il tempo reale
+st_autorefresh(interval=5000, key="datarefresh")
 
 
 def get_data():
-    # ttl=0 per non usare la cache e avere dati freschi
-    return conn.read(spreadsheet=url, ttl="0s").dropna(how='all')
+    try:
+        response = requests.get(API_URL)
+        return pd.DataFrame(response.json())
+    except:
+        return pd.DataFrame(columns=["partita", "mano", "p1", "p2", "chi"])
 
 
-def save_data(df):
-    conn.update(spreadsheet=url, data=df)
-
-
+# --- LOGICA ---
+st.title("🃏 Pinnacola Live Sync")
 df = get_data()
 
-# --- INTERFACCIA ---
-st.title("🃏 Pinnacola Real-Time Score")
+# Converti i dati in numeri
+if not df.empty:
+    df[['partita', 'mano', 'p1', 'p2']] = df[['partita', 'mano', 'p1', 'p2']].apply(pd.to_numeric)
 
-# Barra laterale solo per impostazioni e reset
+# Impostazioni Sidebar
 with st.sidebar:
     soglia = st.number_input("Soglia Vittoria", value=1500, step=500)
-    if st.button("⚠️ Reset Totale Torneo"):
-        reset_df = pd.DataFrame(columns=["Partita", "Mano", "Punti_Bababui", "Punti_Io", "Chi_Ha_Chiuso"])
-        save_data(reset_df)
+    if st.button("🗑️ Reset Totale"):
+        requests.delete(f"{API_URL}/all")
         st.rerun()
 
-# Calcolo punteggi
+# Calcolo Punteggi
 if not df.empty:
-    n_partita = int(df['Partita'].max())
-    attuale = df[df['Partita'] == n_partita]
-    tot1 = attuale['Punti_Bababui'].sum()
-    tot2 = attuale['Punti_Io'].sum()
+    n_p = df['partita'].max()
+    curr = df[df['partita'] == n_p]
+    tot1, tot2 = curr['p1'].sum(), curr['p2'].sum()
 else:
-    n_partita, tot1, tot2 = 1, 0, 0
+    n_p, tot1, tot2 = 1, 0, 0
 
-# DASHBOARD PUNTEGGI
+# Dashboard
 c1, c2 = st.columns(2)
 c1.metric("BABABUI", int(tot1))
 c2.metric("IO", int(tot2))
 
 st.divider()
 
-# --- INSERIMENTO (Sincronizzato) ---
-vinto = tot1 >= soglia or tot2 >= soglia
-
-if not vinto:
-    st.subheader("📝 Inserisci Punti Mano")
-    # Nota: Streamlit non permette di "svuotare al click" nativamente,
-    # ma usando value=None lo zero non c'è e appare il cursore vuoto.
+# --- INSERIMENTO (Senza lo 0 iniziale) ---
+if tot1 < soglia and tot2 < soglia:
+    st.subheader("📝 Registra Mano")
     with st.form("form_mano", clear_on_submit=True):
-        col_a, col_b, col_c = st.columns(3)
-        p1 = col_a.number_input("Punti Bababui", value=None, placeholder="Scrivi punti...")
-        p2 = col_b.number_input("Punti Io", value=None, placeholder="Scrivi punti...")
-        chi = col_c.selectbox("Chi ha chiuso?", ["Nessuno", "Bababui", "Io"])
+        col1, col2, col3 = st.columns(3)
+        # value=None toglie lo 0 automatico
+        val1 = col1.number_input("Punti Bababui", value=None, placeholder="Scrivi...")
+        val2 = col2.number_input("Punti Io", value=None, placeholder="Scrivi...")
+        chi_chiude = col3.selectbox("Chi ha chiuso?", ["Nessuno", "Bababui", "Io"])
 
         if st.form_submit_button("REGISTRA"):
-            # Se p1 o p2 sono None, li trasformiamo in 0
-            val1 = p1 if p1 is not None else 0
-            val2 = p2 if p2 is not None else 0
-
-            mano_n = len(df[df['Partita'] == n_partita]) + 1
-            nuova = pd.DataFrame(
-                [{"Partita": n_partita, "Mano": mano_n, "Punti_Bababui": val1, "Punti_Io": val2, "Chi_Ha_Chiuso": chi}])
-            updated = pd.concat([df, nuova], ignore_index=True)
-            save_data(updated)
+            nuova_mano = {
+                "partita": int(n_p),
+                "mano": len(curr) + 1 if not df.empty else 1,
+                "p1": val1 if val1 is not None else 0,
+                "p2": val2 if val2 is not None else 0,
+                "chi": chi_chiude
+            }
+            requests.post(API_URL, json={"data": [nuova_mano]})
             st.rerun()
 else:
     st.balloons()
     vincitore = "Bababui" if tot1 >= soglia else "Io"
     st.success(f"🏆 {vincitore.upper()} HA VINTO!")
-    if st.button("Inizia Nuova Partita"):
-        nuova_p = pd.DataFrame(
-            [{"Partita": n_partita + 1, "Mano": 0, "Punti_Bababui": 0, "Punti_Io": 0, "Chi_Ha_Chiuso": "START"}])
-        updated = pd.concat([df, nuova_p], ignore_index=True)
-        save_data(updated)
+    if st.button("🏁 Nuova Partita"):
+        nuova_p = {"partita": int(n_p + 1), "mano": 0, "p1": 0, "p2": 0, "chi": "START"}
+        requests.post(API_URL, json={"data": [nuova_p]})
         st.rerun()
 
+# --- STORICO IN TEMPO REALE ---
 st.divider()
-
-# --- STORICO IN TEMPO REALE (Sempre visibile a entrambi) ---
-st.subheader("📜 Storico della Partita Corrente")
+st.subheader("📜 Storico della Partita")
 if not df.empty:
-    # Mostriamo solo la partita in corso, ordinata per l'ultima mano inserita
-    st.dataframe(df[df['Partita'] == n_partita].sort_values(by="Mano", ascending=False), use_container_width=True)
-
-    st.divider()
-    st.subheader("📈 Riepilogo Chiusure Totali")
-    chiusure = df[df['Chi_Ha_Chiuso'].isin(['Bababui', 'Io'])]['Chi_Ha_Chiuso'].value_counts()
-    st.write(chiusure)
+    # Mostra la tabella con le ultime mani in alto
+    st.table(df[df['partita'] == n_p].sort_values(by="mano", ascending=False))
