@@ -4,7 +4,7 @@ import requests
 from streamlit_autorefresh import st_autorefresh
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Pinnacola LIVE", layout="wide")
+st.set_page_config(page_title="🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr", layout="wide")
 
 # !!! INCOLLA QUI SOTTO IL TUO LINK CHE FINISCE CON /exec !!!
 API_URL = "https://script.google.com/macros/s/AKfycbx9EZz8y8V19YkL0NMo8ic1oV5J411Mb71kx7mpLX0rofl2yAOOLcya_ozxoEWD8vIB9w/exec"
@@ -37,11 +37,11 @@ with st.sidebar:
         st.rerun()
 
 # --- LOGICA CALCOLO VITTORIE (IL MEDAGLIERE) ---
-vinte_baba, vinte_io = 0, 0
+vinte_makka, vinte_omo = 0, 0
 if not df.empty and df['partita'].max() > 0:
     partite_tot = df.groupby('partita').agg({'p1': 'sum', 'p2': 'sum'})
-    vinte_baba = (partite_tot['p1'] >= soglia).sum()
-    vinte_io = (partite_tot['p2'] >= soglia).sum()
+    vinte_makka = (partite_tot['p1'] >= soglia).sum()
+    vinte_omo = (partite_tot['p2'] >= soglia).sum()
     n_p = df['partita'].max()
     curr = df[df['partita'] == n_p]
     tot1, tot2 = curr['p1'].sum(), curr['p2'].sum()
@@ -49,19 +49,19 @@ else:
     n_p, tot1, tot2 = 1, 0, 0
 
 # --- DASHBOARD PRINCIPALE ---
-st.title("🃏 Pinnacola Master Cup") # Puoi cambiare il titolo qui!
+st.title("🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr") 
 
 # Medagliere
 m1, m2 = st.columns(2)
-m1.subheader(f"🏆 Bababui: {vinte_baba}")
-m2.subheader(f"🏆 Io: {vinte_io}")
+m1.subheader(f"🏆 Makka Pakka: {vinte_makka}")
+m2.subheader(f"🏆 Omo Cratolo: {vinte_omo}")
 
 st.divider()
 
 # Punteggio Partita Corrente
 c1, c2 = st.columns(2)
-c1.metric("PUNTI BABABUI", int(tot1))
-c2.metric("PUNTI IO", int(tot2))
+c1.metric("MAKKA PAKKA (Punti)", int(tot1))
+c2.metric("OMO CRATOLO (Punti)", int(tot2))
 
 st.divider()
 
@@ -71,9 +71,9 @@ if tot1 < soglia and tot2 < soglia:
     with st.form("form_mano", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
         # value=None toglie lo 0 automatico. min_value=-2000 permette i negativi.
-        val1 = col1.number_input("Punti Bababui", value=None, placeholder="Scrivi...", min_value=-2000, max_value=2000)
-        val2 = col2.number_input("Punti Io", value=None, placeholder="Scrivi...", min_value=-2000, max_value=2000)
-        chi_chiude = col3.selectbox("Chi ha chiuso?", ["Nessuno", "Bababui", "Io"])
+        val1 = col1.number_input("Punti Makka Pakka", value=None, placeholder="Inserisci...", min_value=-2000, max_value=2000)
+        val2 = col2.number_input("Punti Omo Cratolo", value=None, placeholder="Inserisci...", min_value=-2000, max_value=2000)
+        chi_chiude = col3.selectbox("Chi ha chiuso?", ["Nessuno", "Makka Pakka", "Omo Cratolo"])
         
         if st.form_submit_button("REGISTRA"):
             nuova_mano = {
@@ -88,7 +88,7 @@ if tot1 < soglia and tot2 < soglia:
             st.rerun()
 else:
     st.balloons()
-    vincitore = "Bababui" if tot1 >= soglia else "Io"
+    vincitore = "Makka Pakka" if tot1 >= soglia else "Omo Cratolo"
     st.success(f"🏆 {vincitore.upper()} HA VINTO LA PARTITA!")
     if st.button("🏁 Inizia Nuova Partita"):
         nuova_p = {"action": "add", "partita": int(n_p + 1), "mano": 0, "p1": 0, "p2": 0, "chi": "START"}
@@ -97,11 +97,14 @@ else:
 
 # --- STORICO IN TEMPO REALE ---
 st.divider()
-st.subheader("📜 Storico della Partita Corrente")
+st.subheader("📜 Storico della Partita")
 if not df.empty:
-    # Mostriamo solo i dati della partita attuale escludendo la riga di START
     display_df = df[(df['partita'] == n_p) & (df['chi'] != 'START')]
     if not display_df.empty:
+        # Rinominiamo le colonne per la visualizzazione
+        display_df = display_df.rename(columns={
+            'p1': 'Punti Makka Pakka', 
+            'p2': 'Punti Omo Cratolo', 
+            'chi': 'Chiusura'
+        })
         st.table(display_df.sort_values(by="mano", ascending=False))
-    else:
-        st.info("Inizia a giocare! Inserisci i punti della prima mano.")
