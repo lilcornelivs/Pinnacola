@@ -79,7 +79,7 @@ with st.sidebar:
 st.title("🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr")
 
 # --- DASHBOARD TEMPO REALE ---
-@st.fragment(run_every="5s")
+@st.fragment(run_every="2s")
 def live_dashboard(s_val):
     data = get_data()
     df_p = data[data['chi'] != 'CONFIG'] if not data.empty else data
@@ -138,3 +138,4 @@ else:
     if st.button("🏁 Inizia Nuova Partita"):
         requests.post(API_URL, json={"action": "add", "partita": n_partita + 1, "mano": 0, "p1": 0, "p2": 0, "chi": "START"})
         st.rerun()
+
