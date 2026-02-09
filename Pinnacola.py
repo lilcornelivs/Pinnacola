@@ -9,13 +9,11 @@ st.set_page_config(page_title="🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr", layout="wide
 # --- SCUDO TOTALE ANTI-APPANNAMENTO ---
 st.markdown("""
     <style>
-    /* Rende tutto opaco e stabile */
     [data-stale="true"], div[data-fragment-id], [data-testid="stAppViewBlockContainer"] > div {
         opacity: 1 !important;
         filter: none !important;
         transition: none !important;
     }
-    /* Nasconde caricamento */
     [data-testid="stStatusWidget"] { display: none !important; }
     * { transition: none !important; animation: none !important; }
     </style>
@@ -24,17 +22,31 @@ st.markdown("""
 # !!! IL TUO URL DI GOOGLE APPS SCRIPT !!!
 API_URL = "https://script.google.com/macros/s/AKfycbw3YLweEqP1AxW912TUcMbBDRKv655VEAdWwG3Etxwrw-L2TG110kPFVaupyXy0j10VRA/exec"
 
+# --- FUNZIONE GET_DATA BLINDATA (FIX KEYERROR) ---
 def get_data():
+    cols = ["partita", "mano", "p1", "p2", "chi"]
     try:
         r = requests.get(API_URL)
-        df_raw = pd.DataFrame(r.json())
-        if not df_raw.empty:
-            for col in ['partita', 'mano', 'p1', 'p2']:
-                if col in df_raw.columns:
-                    df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce').fillna(0).astype(int)
+        data = r.json()
+        
+        # Se la risposta è una lista vuota, ritorna dataframe vuoto ma CON LE COLONNE
+        if not data:
+             return pd.DataFrame(columns=cols)
+             
+        df_raw = pd.DataFrame(data)
+        
+        # Se mancano le colonne (es. reset totale), le forziamo
+        if "partita" not in df_raw.columns:
+            return pd.DataFrame(columns=cols)
+
+        # Conversione numeri
+        for col in ['partita', 'mano', 'p1', 'p2']:
+            if col in df_raw.columns:
+                df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce').fillna(0).astype(int)
         return df_raw
     except:
-        return pd.DataFrame(columns=["partita", "mano", "p1", "p2", "chi"])
+        # In caso di qualsiasi errore, ritorna tabella vuota ma sicura
+        return pd.DataFrame(columns=cols)
 
 # --- CARICAMENTO INIZIALE ---
 df_init = get_data()
@@ -69,12 +81,9 @@ def live_dashboard(s_val):
     v_makka, v_omo, n_p, t1, t2 = 0, 0, 1, 0, 0
     
     if not df_p.empty:
-        # Calcolo Medagliere (aggiornato con la nuova logica di vittoria è complesso, 
-        # qui manteniamo il conteggio semplice basato su chi supera la soglia per lo storico,
-        # ma per la partita corrente usiamo la logica avanzata sotto)
+        # Logica Medagliere (conta chi ha vinto le partite passate)
+        # Qui semplifichiamo: conta chi ha superato la soglia nello storico
         partite = df_p.groupby('partita').agg({'p1':'sum', 'p2':'sum'})
-        
-        # Logica medagliere approssimata (conta vittoria se uno supera soglia e l'altro no, o se supera ed è maggiore)
         v_makka = ((partite['p1'] >= s_val) & (partite['p1'] > partite['p2'])).sum()
         v_omo = ((partite['p2'] >= s_val) & (partite['p2'] > partite['p1'])).sum()
         
@@ -101,19 +110,19 @@ def live_dashboard(s_val):
 # Esecuzione Dashboard
 n_partita, tot1, tot2 = live_dashboard(soglia_scelta)
 
-# --- LOGICA VITTORIA AVANZATA ---
-# La partita continua se:
-# 1. Nessuno ha raggiunto la soglia.
-# 2. OPPURE i punteggi sono PARI (anche se sopra la soglia).
-partita_in_corso = (tot1 < soglia_scelta and tot2 < soglia_scelta) or (tot1 == tot2)
+# --- LOGICA DI GIOCO ---
+# 1. Nessuno ha superato la soglia -> SI GIOCA
+# 2. Qualcuno ha superato, ma sono PARI -> SI GIOCA (Pareggio oltranza)
+game_over = False
 
-if partita_in_corso:
+if tot1 >= soglia_scelta or tot2 >= soglia_scelta:
+    if tot1 != tot2:
+        game_over = True
+    else:
+        st.warning(f"⚠️ PAREGGIO OLTRE SOGLIA ({tot1} pari)! Si continua finché uno non supera l'altro.")
+
+if not game_over:
     st.write("---")
-    
-    # Avviso speciale se siamo in pareggio oltre la soglia
-    if tot1 >= soglia_scelta and tot2 >= soglia_scelta and tot1 == tot2:
-        st.warning(f"⚠️ PAREGGIO OLTRE LA SOGLIA ({tot1} a {tot2})! Si continua finché uno non supera l'altro!")
-
     st.subheader("📝 Registra Mano")
     with st.form("form_mano", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
@@ -122,9 +131,13 @@ if partita_in_corso:
         chi_chiude = col3.selectbox("Chi ha chiuso?", ["Nessuno", "Makka Pakka", "Omo Cratolo"])
         
         if st.form_submit_button("REGISTRA"):
+            # FIX BLINDATO PER NUMERO MANO
             temp_df = get_data()
-            mani_partita = temp_df[(temp_df['partita'] == n_partita) & (temp_df['chi'] != 'START')]
-            numero_mano_reale = len(mani_partita) + 1
+            if 'partita' in temp_df.columns:
+                mani_partita = temp_df[(temp_df['partita'] == n_partita) & (temp_df['chi'] != 'START')]
+                numero_mano_reale = len(mani_partita) + 1
+            else:
+                numero_mano_reale = 1
 
             requests.post(API_URL, json={
                 "action": "add", 
@@ -136,15 +149,11 @@ if partita_in_corso:
             })
             st.rerun()
 else:
-    # SE SIAMO QUI, QUALCUNO HA VINTO (Soglia superata E punteggi diversi)
+    # PARTITA FINITA
     st.balloons()
-    
-    # Calcolo vincitore basato sul punteggio più alto
     vincitore = "Makka Pakka" if tot1 > tot2 else "Omo Cratolo"
-    differenza = abs(tot1 - tot2)
-    
-    st.success(f"🏆 {vincitore.upper()} HA VINTO LA PARTITA DI {differenza} PUNTI!")
-    st.write(f"Punteggio finale: {tot1} vs {tot2}")
+    diff = abs(tot1 - tot2)
+    st.success(f"🏆 {vincitore.upper()} HA VINTO DI {diff} PUNTI!")
     
     if st.button("🏁 Inizia Nuova Partita"):
         requests.post(API_URL, json={"action": "add", "partita": n_partita + 1, "mano": 0, "p1": 0, "p2": 0, "chi": "START"})
