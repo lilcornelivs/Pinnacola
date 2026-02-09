@@ -22,30 +22,21 @@ st.markdown("""
 # !!! IL TUO URL DI GOOGLE APPS SCRIPT !!!
 API_URL = "https://script.google.com/macros/s/AKfycbw3YLweEqP1AxW912TUcMbBDRKv655VEAdWwG3Etxwrw-L2TG110kPFVaupyXy0j10VRA/exec"
 
-# --- FUNZIONE GET_DATA BLINDATA (FIX KEYERROR) ---
+# --- FUNZIONE GET_DATA ---
 def get_data():
     cols = ["partita", "mano", "p1", "p2", "chi"]
     try:
         r = requests.get(API_URL)
         data = r.json()
-        
-        # Se la risposta è una lista vuota, ritorna dataframe vuoto ma CON LE COLONNE
-        if not data:
-             return pd.DataFrame(columns=cols)
-             
+        if not data: return pd.DataFrame(columns=cols)
         df_raw = pd.DataFrame(data)
-        
-        # Se mancano le colonne (es. reset totale), le forziamo
-        if "partita" not in df_raw.columns:
-            return pd.DataFrame(columns=cols)
-
-        # Conversione numeri
+        if "partita" not in df_raw.columns: return pd.DataFrame(columns=cols)
+        # Conversione numerica
         for col in ['partita', 'mano', 'p1', 'p2']:
             if col in df_raw.columns:
                 df_raw[col] = pd.to_numeric(df_raw[col], errors='coerce').fillna(0).astype(int)
         return df_raw
     except:
-        # In caso di qualsiasi errore, ritorna tabella vuota ma sicura
         return pd.DataFrame(columns=cols)
 
 # --- CARICAMENTO INIZIALE ---
@@ -66,7 +57,7 @@ with st.sidebar:
         time.sleep(1)
         st.rerun()
     st.divider()
-    if st.button("🗑️ Reset Partite"):
+    if st.button("🗑️ Reset Totale Torneo"):
         requests.post(API_URL, json={"action": "reset"})
         st.rerun()
 
@@ -76,20 +67,21 @@ st.title("🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr")
 @st.fragment(run_every="2s") 
 def live_dashboard(s_val):
     data = get_data()
-    df_p = data[data['chi'] != 'CONFIG'] if not data.empty else data
+    # Escludiamo righe speciali dai calcoli
+    df_p = data[~data['chi'].isin(['CONFIG', 'WIN_MAKKA', 'WIN_OMO'])] if not data.empty else data
     
     v_makka, v_omo, n_p, t1, t2 = 0, 0, 1, 0, 0
     
-    if not df_p.empty:
-        # Logica Medagliere (conta chi ha vinto le partite passate)
-        # Qui semplifichiamo: conta chi ha superato la soglia nello storico
-        partite = df_p.groupby('partita').agg({'p1':'sum', 'p2':'sum'})
-        v_makka = ((partite['p1'] >= s_val) & (partite['p1'] > partite['p2'])).sum()
-        v_omo = ((partite['p2'] >= s_val) & (partite['p2'] > partite['p1'])).sum()
+    if not data.empty:
+        # Conta le vittorie TIMBRATE nel database
+        v_makka = len(data[data['chi'] == 'WIN_MAKKA'])
+        v_omo = len(data[data['chi'] == 'WIN_OMO'])
         
-        n_p = int(df_p['partita'].max())
-        curr = df_p[df_p['partita'] == n_p]
-        t1, t2 = curr['p1'].sum(), curr['p2'].sum()
+        # Calcolo partita corrente
+        if not df_p.empty:
+            n_p = int(df_p['partita'].max())
+            curr = df_p[df_p['partita'] == n_p]
+            t1, t2 = curr['p1'].sum(), curr['p2'].sum()
 
     m1, m2 = st.columns(2)
     m1.subheader(f"🏆 Makka Pakka: {v_makka}")
@@ -101,9 +93,26 @@ def live_dashboard(s_val):
     
     st.divider()
     st.subheader("📜 Storico Partita Corrente")
-    disp = df_p[(df_p['partita'] == n_p) & (df_p['chi'] != 'START')] if not df_p.empty else pd.DataFrame()
-    if not disp.empty:
-        st.table(disp.rename(columns={'p1':'Punti M.P.', 'p2':'Punti O.C.', 'chi':'Chi'}).sort_values(by="mano", ascending=False))
+    
+    if not df_p.empty:
+        # Filtriamo solo la partita attuale e togliamo lo START
+        disp = df_p[(df_p['partita'] == n_p) & (~df_p['chi'].isin(['START']))] 
+        
+        if not disp.empty:
+            # Ordiniamo PRIMA di rinominare
+            disp = disp.sort_values(by="mano", ascending=False)
+            
+            # RINOMINIAMO LE COLONNE COME HAI CHIESTO
+            disp = disp.rename(columns={
+                'partita': 'Partita N.',
+                'mano': 'Mano N.',
+                'p1': 'Punti Makka Pakka',
+                'p2': 'Punti Omo Cratolo',
+                'chi': 'Chi ha chiuso'
+            })
+            
+            # Mostriamo la tabella pulita senza l'indice numerico a sinistra (hide_index=True è supportato da st.dataframe, per st.table è automatico o si usa un trick, qui st.table va bene)
+            st.table(disp)
     
     return n_p, t1, t2
 
@@ -111,15 +120,13 @@ def live_dashboard(s_val):
 n_partita, tot1, tot2 = live_dashboard(soglia_scelta)
 
 # --- LOGICA DI GIOCO ---
-# 1. Nessuno ha superato la soglia -> SI GIOCA
-# 2. Qualcuno ha superato, ma sono PARI -> SI GIOCA (Pareggio oltranza)
 game_over = False
 
 if tot1 >= soglia_scelta or tot2 >= soglia_scelta:
     if tot1 != tot2:
         game_over = True
     else:
-        st.warning(f"⚠️ PAREGGIO OLTRE SOGLIA ({tot1} pari)! Si continua finché uno non supera l'altro.")
+        st.warning(f"⚠️ PAREGGIO OLTRE SOGLIA ({tot1} pari)! Si continua.")
 
 if not game_over:
     st.write("---")
@@ -131,10 +138,10 @@ if not game_over:
         chi_chiude = col3.selectbox("Chi ha chiuso?", ["Nessuno", "Makka Pakka", "Omo Cratolo"])
         
         if st.form_submit_button("REGISTRA"):
-            # FIX BLINDATO PER NUMERO MANO
             temp_df = get_data()
             if 'partita' in temp_df.columns:
-                mani_partita = temp_df[(temp_df['partita'] == n_partita) & (temp_df['chi'] != 'START')]
+                # Contiamo le mani reali per avere il numero progressivo 1, 2, 3...
+                mani_partita = temp_df[(temp_df['partita'] == n_partita) & (~temp_df['chi'].isin(['START', 'WIN_MAKKA', 'WIN_OMO', 'CONFIG']))]
                 numero_mano_reale = len(mani_partita) + 1
             else:
                 numero_mano_reale = 1
@@ -151,10 +158,15 @@ if not game_over:
 else:
     # PARTITA FINITA
     st.balloons()
-    vincitore = "Makka Pakka" if tot1 > tot2 else "Omo Cratolo"
-    diff = abs(tot1 - tot2)
-    st.success(f"🏆 {vincitore.upper()} HA VINTO DI {diff} PUNTI!")
+    vincitore_nome = "Makka Pakka" if tot1 > tot2 else "Omo Cratolo"
+    win_code = "WIN_MAKKA" if tot1 > tot2 else "WIN_OMO"
     
-    if st.button("🏁 Inizia Nuova Partita"):
+    st.success(f"🏆 {vincitore_nome.upper()} HA VINTO!")
+    st.metric("Punteggio Finale", f"{tot1} - {tot2}")
+    
+    if st.button("🏁 SALVA VITTORIA E INIZIA NUOVA PARTITA"):
+        # 1. Salva vittoria
+        requests.post(API_URL, json={"action": "add", "partita": n_partita, "mano": 999, "p1": 0, "p2": 0, "chi": win_code})
+        # 2. Nuova partita
         requests.post(API_URL, json={"action": "add", "partita": n_partita + 1, "mano": 0, "p1": 0, "p2": 0, "chi": "START"})
         st.rerun()
