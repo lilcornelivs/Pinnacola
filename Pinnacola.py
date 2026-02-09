@@ -6,36 +6,18 @@ import time
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr", layout="wide")
 
-# --- SCUDO TOTALE ANTI-APPANNAMENTO (CSS AGGRESSIVO) ---
+# --- SCUDO TOTALE ANTI-APPANNAMENTO ---
 st.markdown("""
     <style>
-    /* 1. Impedisce l'oscuramento dei frammenti e di qualsiasi blocco in aggiornamento */
-    [data-stale="true"] {
-        opacity: 1 !important;
-        filter: none !important;
-    }
-
-    /* 2. Blocca l'opacità su ogni possibile contenitore di Streamlit */
-    div[data-fragment-id], 
-    div[data-testid="stMetricValue"], 
-    div[data-testid="stTable"],
-    .stTable,
-    [data-testid="stAppViewBlockContainer"] > div {
+    /* Rende tutto opaco e stabile */
+    [data-stale="true"], div[data-fragment-id], [data-testid="stAppViewBlockContainer"] > div {
         opacity: 1 !important;
         filter: none !important;
         transition: none !important;
     }
-
-    /* 3. Nasconde l'icona rotante in alto a destra */
-    [data-testid="stStatusWidget"] {
-        display: none !important;
-    }
-
-    /* 4. Forza il cursore e il testo a non avere transizioni fluide (che causano il 'flash') */
-    * {
-        transition: none !important;
-        animation: none !important;
-    }
+    /* Nasconde caricamento */
+    [data-testid="stStatusWidget"] { display: none !important; }
+    * { transition: none !important; animation: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -54,7 +36,7 @@ def get_data():
     except:
         return pd.DataFrame(columns=["partita", "mano", "p1", "p2", "chi"])
 
-# --- CARICAMENTO INIZIALE SOGLIA ---
+# --- CARICAMENTO INIZIALE ---
 df_init = get_data()
 soglia_default = 1500
 if not df_init.empty and 'chi' in df_init.columns:
@@ -78,8 +60,8 @@ with st.sidebar:
 
 st.title("🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr")
 
-# --- DASHBOARD TEMPO REALE ---
-@st.fragment(run_every="2s")
+# --- DASHBOARD TEMPO REALE (TURBO ATTIVATO: 2 SECONDI) ---
+@st.fragment(run_every="2s") 
 def live_dashboard(s_val):
     data = get_data()
     df_p = data[data['chi'] != 'CONFIG'] if not data.empty else data
@@ -87,11 +69,9 @@ def live_dashboard(s_val):
     v_makka, v_omo, n_p, t1, t2 = 0, 0, 1, 0, 0
     
     if not df_p.empty:
-        # Medagliere
         partite = df_p.groupby('partita').agg({'p1':'sum', 'p2':'sum'})
         v_makka = (partite['p1'] >= s_val).sum()
         v_omo = (partite['p2'] >= s_val).sum()
-        # Partita Corrente
         n_p = int(df_p['partita'].max())
         curr = df_p[df_p['partita'] == n_p]
         t1, t2 = curr['p1'].sum(), curr['p2'].sum()
@@ -108,7 +88,6 @@ def live_dashboard(s_val):
     st.subheader("📜 Storico Partita Corrente")
     disp = df_p[(df_p['partita'] == n_p) & (df_p['chi'] != 'START')] if not df_p.empty else pd.DataFrame()
     if not disp.empty:
-        # Usiamo st.table che è più stabile di st.dataframe per i refresh frequenti
         st.table(disp.rename(columns={'p1':'Punti M.P.', 'p2':'Punti O.C.', 'chi':'Chi'}).sort_values(by="mano", ascending=False))
     
     return n_p, t1, t2
@@ -138,4 +117,3 @@ else:
     if st.button("🏁 Inizia Nuova Partita"):
         requests.post(API_URL, json={"action": "add", "partita": n_partita + 1, "mano": 0, "p1": 0, "p2": 0, "chi": "START"})
         st.rerun()
-
