@@ -60,7 +60,7 @@ with st.sidebar:
 
 st.title("🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr")
 
-# --- DASHBOARD TEMPO REALE (TURBO ATTIVATO: 2 SECONDI) ---
+# --- DASHBOARD TEMPO REALE ---
 @st.fragment(run_every="2s") 
 def live_dashboard(s_val):
     data = get_data()
@@ -104,10 +104,21 @@ if tot1 < soglia_scelta and tot2 < soglia_scelta:
         v1 = col1.number_input("Punti Makka Pakka", value=None, placeholder="-30, 50...", step=5, min_value=-5000)
         v2 = col2.number_input("Punti Omo Cratolo", value=None, placeholder="-30, 50...", step=5, min_value=-5000)
         chi_chiude = col3.selectbox("Chi ha chiuso?", ["Nessuno", "Makka Pakka", "Omo Cratolo"])
+        
         if st.form_submit_button("REGISTRA"):
+            # FIX: Calcoliamo il numero mano corretto contando le righe
+            # Scarichiamo i dati freschi per non sbagliare conteggio
+            temp_df = get_data()
+            mani_partita = temp_df[(temp_df['partita'] == n_partita) & (temp_df['chi'] != 'START')]
+            numero_mano_reale = len(mani_partita) + 1
+
             requests.post(API_URL, json={
-                "action": "add", "partita": n_partita, "mano": int(time.time()),
-                "p1": v1 if v1 is not None else 0, "p2": v2 if v2 is not None else 0, "chi": chi_chiude
+                "action": "add", 
+                "partita": n_partita, 
+                "mano": numero_mano_reale, # ORA E' GIUSTO (1, 2, 3...)
+                "p1": v1 if v1 is not None else 0, 
+                "p2": v2 if v2 is not None else 0, 
+                "chi": chi_chiude
             })
             st.rerun()
 else:
