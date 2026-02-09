@@ -6,31 +6,32 @@ import time
 # --- CONFIGURAZIONE PAGINA ---
 st.set_page_config(page_title="🃏 Pppprrrrrrrrrrrrrrrrrrrrrrrrr", layout="wide")
 
-# --- CSS NUCLEARE ANTI-APPANNAMENTO ---
-# Questo blocca TUTTI i contenitori di Streamlit alla massima opacità
+# --- SCUDO TOTALE ANTI-APPANNAMENTO (CSS AGGRESSIVO) ---
 st.markdown("""
     <style>
-    /* Blocca l'opacità di tutta l'app */
-    [data-testid="stAppViewContainer"], 
-    [data-testid="stAppViewBlockContainer"], 
-    [data-testid="stApp"],
-    section.main {
+    /* 1. Impedisce l'oscuramento dei frammenti e di qualsiasi blocco in aggiornamento */
+    [data-stale="true"] {
+        opacity: 1 !important;
+        filter: none !important;
+    }
+
+    /* 2. Blocca l'opacità su ogni possibile contenitore di Streamlit */
+    div[data-fragment-id], 
+    div[data-testid="stMetricValue"], 
+    div[data-testid="stTable"],
+    .stTable,
+    [data-testid="stAppViewBlockContainer"] > div {
         opacity: 1 !important;
         filter: none !important;
         transition: none !important;
     }
-    
-    /* Elimina l'oscuramento specifico che avviene durante il 'running' */
-    div[data-testid="stStatusWidget"] {
+
+    /* 3. Nasconde l'icona rotante in alto a destra */
+    [data-testid="stStatusWidget"] {
         display: none !important;
     }
-    
-    /* Evita che gli elementi diventino trasparenti mentre caricano */
-    .st-emotion-cache-16idsys p, .st-emotion-cache-16idsys span, .st-emotion-cache-16idsys div {
-        opacity: 1 !important;
-    }
 
-    /* Rende tutto istantaneo */
+    /* 4. Forza il cursore e il testo a non avere transizioni fluide (che causano il 'flash') */
     * {
         transition: none !important;
         animation: none !important;
@@ -107,6 +108,7 @@ def live_dashboard(s_val):
     st.subheader("📜 Storico Partita Corrente")
     disp = df_p[(df_p['partita'] == n_p) & (df_p['chi'] != 'START')] if not df_p.empty else pd.DataFrame()
     if not disp.empty:
+        # Usiamo st.table che è più stabile di st.dataframe per i refresh frequenti
         st.table(disp.rename(columns={'p1':'Punti M.P.', 'p2':'Punti O.C.', 'chi':'Chi'}).sort_values(by="mano", ascending=False))
     
     return n_p, t1, t2
