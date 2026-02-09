@@ -69,9 +69,15 @@ def live_dashboard(s_val):
     v_makka, v_omo, n_p, t1, t2 = 0, 0, 1, 0, 0
     
     if not df_p.empty:
+        # Calcolo Medagliere (aggiornato con la nuova logica di vittoria è complesso, 
+        # qui manteniamo il conteggio semplice basato su chi supera la soglia per lo storico,
+        # ma per la partita corrente usiamo la logica avanzata sotto)
         partite = df_p.groupby('partita').agg({'p1':'sum', 'p2':'sum'})
-        v_makka = (partite['p1'] >= s_val).sum()
-        v_omo = (partite['p2'] >= s_val).sum()
+        
+        # Logica medagliere approssimata (conta vittoria se uno supera soglia e l'altro no, o se supera ed è maggiore)
+        v_makka = ((partite['p1'] >= s_val) & (partite['p1'] > partite['p2'])).sum()
+        v_omo = ((partite['p2'] >= s_val) & (partite['p2'] > partite['p1'])).sum()
+        
         n_p = int(df_p['partita'].max())
         curr = df_p[df_p['partita'] == n_p]
         t1, t2 = curr['p1'].sum(), curr['p2'].sum()
@@ -95,9 +101,19 @@ def live_dashboard(s_val):
 # Esecuzione Dashboard
 n_partita, tot1, tot2 = live_dashboard(soglia_scelta)
 
-# --- FORM REGISTRAZIONE ---
-if tot1 < soglia_scelta and tot2 < soglia_scelta:
+# --- LOGICA VITTORIA AVANZATA ---
+# La partita continua se:
+# 1. Nessuno ha raggiunto la soglia.
+# 2. OPPURE i punteggi sono PARI (anche se sopra la soglia).
+partita_in_corso = (tot1 < soglia_scelta and tot2 < soglia_scelta) or (tot1 == tot2)
+
+if partita_in_corso:
     st.write("---")
+    
+    # Avviso speciale se siamo in pareggio oltre la soglia
+    if tot1 >= soglia_scelta and tot2 >= soglia_scelta and tot1 == tot2:
+        st.warning(f"⚠️ PAREGGIO OLTRE LA SOGLIA ({tot1} a {tot2})! Si continua finché uno non supera l'altro!")
+
     st.subheader("📝 Registra Mano")
     with st.form("form_mano", clear_on_submit=True):
         col1, col2, col3 = st.columns(3)
@@ -106,8 +122,6 @@ if tot1 < soglia_scelta and tot2 < soglia_scelta:
         chi_chiude = col3.selectbox("Chi ha chiuso?", ["Nessuno", "Makka Pakka", "Omo Cratolo"])
         
         if st.form_submit_button("REGISTRA"):
-            # FIX: Calcoliamo il numero mano corretto contando le righe
-            # Scarichiamo i dati freschi per non sbagliare conteggio
             temp_df = get_data()
             mani_partita = temp_df[(temp_df['partita'] == n_partita) & (temp_df['chi'] != 'START')]
             numero_mano_reale = len(mani_partita) + 1
@@ -115,16 +129,23 @@ if tot1 < soglia_scelta and tot2 < soglia_scelta:
             requests.post(API_URL, json={
                 "action": "add", 
                 "partita": n_partita, 
-                "mano": numero_mano_reale, # ORA E' GIUSTO (1, 2, 3...)
+                "mano": numero_mano_reale, 
                 "p1": v1 if v1 is not None else 0, 
                 "p2": v2 if v2 is not None else 0, 
                 "chi": chi_chiude
             })
             st.rerun()
 else:
+    # SE SIAMO QUI, QUALCUNO HA VINTO (Soglia superata E punteggi diversi)
     st.balloons()
-    vincitore = "Makka Pakka" if tot1 >= soglia_scelta else "Omo Cratolo"
-    st.success(f"🏆 {vincitore.upper()} HA VINTO LA PARTITA!")
+    
+    # Calcolo vincitore basato sul punteggio più alto
+    vincitore = "Makka Pakka" if tot1 > tot2 else "Omo Cratolo"
+    differenza = abs(tot1 - tot2)
+    
+    st.success(f"🏆 {vincitore.upper()} HA VINTO LA PARTITA DI {differenza} PUNTI!")
+    st.write(f"Punteggio finale: {tot1} vs {tot2}")
+    
     if st.button("🏁 Inizia Nuova Partita"):
         requests.post(API_URL, json={"action": "add", "partita": n_partita + 1, "mano": 0, "p1": 0, "p2": 0, "chi": "START"})
         st.rerun()
